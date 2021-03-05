@@ -21,7 +21,7 @@ Repo mainly contains backend codes for the app. You can use it for better fronte
     docker run -p 6379:6379 -d redis:5
 
 
-3 #### Run the server:
+3. #### Run the server:
     py manage.py runserver
 
 
