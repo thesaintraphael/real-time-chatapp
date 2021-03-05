@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+{% load humanize %}
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversations</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+        integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+    <link rel="stylesheet" href="{% static 'style.css' %}">
+</head>
+<body>
+
+  <style>
+    #not-icon{
+      width: 4%;
+      height: 5%;
+    }
+
+    #not-total{
+      display: inline-block;
+      text-align: center;
+      color:#fff;
+      background-color: red;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      font-size: 14px;
+    }
+  </style>
+  
+  <nav class="navbar navbar-expand-lg navbar-light bg-dark">
+    <a class="navbar-brand" href="{% url 'index' %}" style="color: white;">Home</a>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+  
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav mr-auto">
+          {% if not request.user.is_authenticated %}
+        <li class="nav-item active">
+          <a class="nav-link" href="#" style="color: white;">Loign <span class="sr-only">(current)</span></a>
+        </li>
+        {% else %}
+        <li class="nav-item">
+          <a class="nav-link" href="#" style="color: white;">Logout</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="{% url 'chat:conversations'%}" style="color: white;">Conversations</a>
+          </li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" style="color: white;" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">          
+
+              <!-- <span id='not-total'>{{ number }}</span> -->
+          </a>
+            </a>
+            <div id='add_notification' class="dropdown-menu" aria-labelledby="navbarDropdown">
+                {%  if notifications %}
+
+                {% for notification in notifications %}
+                <a class="dropdown-item" href="{% url 'chat:notification' notification.id %}">{{ notification.created_by }} sent you a message </a>
+                {% endfor %}
+              {% endif %}
+
+              {%  if gr_notifications %}
+
+              {% for notification in gr_notifications %}
+              <a class="dropdown-item" href="{% url 'chat:gr-notification' notification.id notification.code %}">{{ notification.created_by }} sent a group message </a>
+              {% endfor %}
+            {% endif %}
+
+            {% if not notifications and not gr_notifications %}
+            <a class="dropdown-item" id='no-new' href="#">No new notifications</a>
+            {% endif %}
+            <a class="dropdown-item" id='mark' onclick="read_all()">Mark all as read</a>
+            </div>
+          </li>
+        {% endif %} 
+
+      </ul>
+      <form class="form-inline my-2 my-lg-0" id='search-form'>
+        {% csrf_token %}
+        <input id='search' class="form-control mr-sm-2" type="search" placeholder="Search users" aria-label="Search">
+        <button class="btn btn-outline-success my-2 my-sm-0" type="submit">Search</button>
+      </form>
+    </div>
+  </nav>
+
+  <style>
+    .card{
+      margin: 10px;
+      padding: 10px;
+    }
+
+    #create-gr{
+      cursor: pointer;
+    }
+
+    #join-gr{
+      cursor: pointer;
+    }
+
+    #mark{
+      cursor: pointer;
+    }
+
+  </style>
+
+    
+    <br><br><br>
+    <div class="container" id='conv-card'>
+
+      
+      <div class="card" id='div-create' style="width: 18rem;">
+        <div class="card-body">
+          <h5 class="card-title"> 
+               Group settings</h5><h6 class="card-subtitle mb-2 text-muted"></h6>
+               <a id="create-gr" onclick="create_group()" class="card-link">Create a new Group</a><br>
+               <a id="join-gr" onclick="join_group()" class="card-link">Join a Group</a>
+          
+        </div>
+      </div>
+      <br>
+<h3>Groups</h3>
+      <br>
+      {% for group in groups %}
+      
+      <div class="card" style="width: 18rem;">
+        <div class="card-body">
+          <h5 class="card-title"> 
+               {{group.name}}</h5><h6 class="card-subtitle mb-2 text-muted">{{group.modified_at|naturaltime}}</h6>
+               <a href="{% url 'chat:group_chat_room' group.code %}" class="card-link">Write a message</a><br>
+               <a href="{% url 'chat:leave-group' group.code %}" class="card-link">Leave a group</a> 
+        </div>
+      </div>
+      {% endfor %}
+      
+      <div id='new-group'>
+
+      </div>
+
+      <br>
+
+      {% if conversations %}
+      <h3>Conversations</h3>
+      <br>
+    {% for conv in conversations %}
+
+    <div class="card" style="width: 18rem;">
+        <div class="card-body">
+          <h5 class="card-title"> {% for user in conv.users.all %}
+            {% if user != request.user %}
+               {{user.username}}</h5><h6 class="card-subtitle mb-2 text-muted">{{ conv.modified_at|naturaltime }}</h6>
+               <a href="{% url 'chat:room' conv.id %}" class="card-link">Write message</a>
+            {% endif %}
+        {% endfor %} 
+          
+        </div>
+      </div>
+
+    {% endfor %}
+      {% endif %}
+    </div>
+
+    <script>
+
+      function get_token(name) {
+		    var cookieValue = null;
+		    if (document.cookie && document.cookie !== '') {
+		        var cookies = document.cookie.split(';');
+		        for (var i = 0; i < cookies.length; i++) {
+		            var cookie = cookies[i].trim();
+		            // Does this cookie string begin with the name we want?
+		            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+		                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+		                break;
+		            }
+		        }
+		    }
+		    return cookieValue;
+    }
+    
+    var csrftoken = get_token('csrftoken');
+
+      var form = document.getElementById('search-form')
+      form.addEventListener('submit', function(e){
+        e.preventDefault();
+
+        var search = document.getElementById('search').value
+        var url = "http://127.0.0.1:8000/chat/api/search-user"
+
+        fetch(url, {
+            method: "POST",
+            headers:{
+                'Content-type':'application/json',
+				'X-CSRFToken':csrftoken,
+            },
+            body: JSON.stringify({'search': search})
+        }
+        )
+        .then((resp) => resp.json())
+        .then(function(data){
+            console.log("Data:", data)
+            document.getElementById('search-form').reset();
+            var wrapper = document.getElementById('conv-card')
+            wrapper.innerHTML = ''
+
+            for(var i=0; i < data.length; i++){
+              var last_login = data[i]['last_login'].substring(0, 9)
+              var last_login_time = data[i]['last_login'].substring(11, 16)
+              wrapper.innerHTML += `
+              <div class="card" style="width: 18rem;">
+        <div class="card-body">
+          <h5 class="card-title">${data[i]['username']}</h5>
+          <h6 class="card-subtitle mb-2 text-muted">Last active: ${last_login} at ${last_login_time} </h6>
+               <a href="http://127.0.0.1:8000/chat/${data[i]['id']}" class="card-link">Write message</a>
+          
+        </div>
+      </div>
+              `
+            
+            }
+        })
+
+      })
+
+    </script>
+
+{{ request.user.id|json_script:"id" }}
+
+<script>
+
+// Create form for Group
+
+    function create_group(){
+      wrapper_create = document.getElementById('div-create')
+      wrapper_create.innerHTML = `
+      <div class="card-body" id='create-form-div'>
+              <h5 class="card-title">New group</h5>
+              <form id='create-form'>
+                {% csrf_token %}
+              <input class="form-control" id="group_name" type="text" placeholder='Name' ></br>
+                <input class="btn btn-secondary btn-lg btn-block" id="submit" type="submit" value="Create">
+                </form>
+        </div>`
+        var create_form = document.getElementById('create-form-div')
+        create_form.addEventListener('submit', function(e){
+        e.preventDefault();
+        console.log('New group')
+        
+
+        var name = document.getElementById('group_name').value
+        const id = JSON.parse(document.getElementById('id').textContent);
+        console.log(id)
+        var url = 'http://127.0.0.1:8000/chat/api/create-group'
+        fetch(url, {
+          method:'POST',
+          headers:{
+            'Content-type':'application/json',
+            'X-CSRFToken':csrftoken,
+          },
+          body:JSON.stringify({'name':name, 'users': [id]})
+        }
+        )
+        .then((resp) => resp.json())
+        .then(function(data){
+          console.log(data)
+          document.getElementById('create-form').reset()
+          wrapper_new_gr = document.getElementById('new-group')
+          wrapper_new_gr.innerHTML += `
+          <div class="card" style="width: 18rem;">
+            <div class="card-body">
+              <h5 class="card-title">${data.name}</h5><h6 class="card-subtitle mb-2 text-muted"></h6>
+                  <a href="http://127.0.0.1:8000/chat/group/${data.code}" class="card-link">Write a message</a><br>
+                  <a href="http://127.0.0.1:8000/chat/leave-group/${data.code}" class="card-link">Leave a group</a> 
+            </div>
+          </div>
+      `
+        })
+        
+      })
+
+    }
+
+    function join_group(){
+      wrapper_create = document.getElementById('div-create')
+      wrapper_create.innerHTML = `
+      <div class="card-body">
+              <h5 class="card-title">Group Code</h5>
+              <form id='join-form'>
+                {% csrf_token %}
+              <input class="form-control" id="join_code" type="text" placeholder='Code' ></br>
+                <input class="btn btn-secondary btn-lg btn-block" id="submit" type="button" value="Join">
+                </form>
+        </div>`
+        document.querySelector('#submit').onclick = function(e) {
+            var groupCode = document.querySelector('#join_code').value;
+            window.location.pathname = '/chat/group/' + groupCode;
+        };
+        
+    }
+
+
+</script>
+    
+
+
+<!-- Notification WebSocket -->
+<script>
+        var loc = window.location
+      var wsStart = "ws://"
+      if (loc.protocol == "https:"){
+        wsStart = "wss://"
+      }
+      var webSocketEndpoint =  wsStart + loc.host + '/notifications/'  // ws : wss   // Websocket URL, Same on as mentioned in the routing.py
+
+
+      var socket = new WebSocket(webSocketEndpoint) // Creating a new Web Socket Connection
+
+      // Socket On receive message Functionality
+      socket.onmessage = function(e){
+        const data = JSON.parse(e.data);
+        no_new_wrapper = document.getElementById('no-new')
+        not_wrapper = document.getElementById('add_notification')
+        no_new_wrapper.innerHTML = ''
+        not_wrapper.innerHTML += `<a class="dropdown-item" href="http://127.0.0.1:8000/chat/group/notification/${data.notification['id']}/${data.notification['code']}">${data.notification['from_user']} sent a message to ${data.notification['group_name']} </a>` 
+            
+      }
+
+      // Socket close Functionality
+      socket.onclose = function(e){
+        console.error('Notification Socket is closed unexpectedly')
+      }
+</script>
+
+<!-- Notification Websocket -->
+
+  <!-- Private Notification Socket -->
+  <script>
+        var loc = window.location
+      var wsStart = "ws://"
+      if (loc.protocol == "https:"){
+        wsStart = "wss://"
+      }
+      var webSocketEndpoint =  wsStart + loc.host + '/ws/private/'  // ws : wss   // Websocket URL, Same on as mentioned in the routing.py
+
+
+      var socket_new = new WebSocket(webSocketEndpoint) // Creating a new Web Socket Connection
+
+      // Socket On receive message Functionality
+      socket_new.onmessage = function(e){
+        const data = JSON.parse(e.data);
+        console.log(data)
+        no_new_wrapper = document.getElementById('no-new')
+        not_wrapper = document.getElementById('add_notification')
+        no_new_wrapper.innerHTML = ''
+        not_wrapper.innerHTML += `<a class="dropdown-item" href="http://127.0.0.1:8000/chat/notification/${data.notification['id']}">${data.notification['from_user']} sent you a message</a>` 
+            
+      }
+
+      // Socket close Functionality
+      socket_new.onclose = function(e){
+        console.error('Notification Socket is closed unexpectedly')
+      }
+
+      socket_new.onopen = function(e){
+        console.log('PrSocket is opened')
+      }
+</script>
+  <!-- Private Notification Socket -->
+
+
+
+
+    <script src="{% static 'read_all.js' %}"></script>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
+        integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"
+        integrity="sha384-9/reFTGAW83EW2RDu2S0VKaIzap3H66lZH81PoYlFhbGU+6BZp6G7niu735Sk7lN" crossorigin="anonymous">
+    </script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"
+        integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV" crossorigin="anonymous">
+    </script>
+
+<br><br><br>
+</body>
+</html>

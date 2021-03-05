@@ -1,0 +1,257 @@
+<html lang="en">
+{% load static %}
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+        integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+        <link rel="stylesheet" href="{% static 'style.css' %}">
+    
+
+    <title>Chat Room</title>
+</head>
+
+<body>
+
+    <style>
+        #not-icon{
+          width: 4%;
+          height: 5%;
+        }
+    
+        #not-total{
+          display: inline-block;
+          text-align: center;
+          color:#fff;
+          background-color: red;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          font-size: 14px;
+        }
+
+        #not-icon-drop{
+          width: 4%;
+          height: 5%;
+        }
+      </style>
+
+    <nav class="navbar navbar-expand-lg navbar-light bg-dark">
+        <a class="navbar-brand" href="{% url 'index' %}" style="color: white;">Home</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+      
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav mr-auto">
+
+              {% if not request.user.is_authenticated %}
+            <li class="nav-item active">
+              <a class="nav-link" href="#" style="color: white;">Login <span class="sr-only">(current)</span></a>
+            </li>
+            {% else %}
+            <li class="nav-item">
+              <a class="nav-link" href="#" style="color: white;">Logout</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'chat:conversations'%}" style="color: white;">Conversations</a>
+              </li>
+              <li class="nav-item dropdown">
+                <a class="nav-link dropdown-toggle" style="color: white;" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <!-- <span id='not-total'>5</span> -->
+                </a>
+                <div id='add_notification' class="dropdown-menu" aria-labelledby="navbarDropdown">
+                    {%  if notifications %}
+
+                    {% for notification in notifications %}
+                    <a class="dropdown-item" href="{% url 'chat:notification' notification.id %}">{{ notification.created_by }} sent you a message </a>
+                    {% endfor %}
+                  {% endif %}
+
+                  {%  if gr_notifications %}
+
+                  {% for notification in gr_notifications %}
+                  <a class="dropdown-item" href="{% url 'chat:gr-notification' notification.id notification.code %}">{{ notification.created_by }} sent a group message </a>
+                  {% endfor %}
+                {% endif %}
+
+                {% if not notifications and not gr_notifications %}
+                <a class="dropdown-item" id='no-new' href="#">No new notifications</a>
+                {% endif %}
+                <a class="dropdown-item" id='mark' onclick="read_all()">Mark all as read</a>
+                </div>
+              </li>
+            {% endif %}
+            </ul>
+        </div>
+      </nav>
+      <br><br><br>
+      
+    <div class="container">
+        <div class="row d-flex justify-content-center">
+            <div class="col-6">
+                <h3>{{group.name}}</h3>
+                <p>Group code: {{group.code}}</p>
+                <p><a style="color: black;" href="{% url 'chat:group_chat_room' group.code %}">Invitation link</a></p>
+                <p>Users:</p>
+                {% for user in group.users.all %}
+                    {{user}}
+                {% endfor %}
+                <form id='chat_form'>
+                    <div class="form-group">
+                        <label for="exampleFormControlTextarea1" class="h4 pt-5">Chat</label>
+                        <textarea class="form-control" id="chat-text" rows="10"></textarea><br>
+                    </div>
+                    <div class="form-group">
+                        <input class="form-control" id="input" type="text"></br>
+                    </div>
+                    <input class="btn btn-secondary btn-lg btn-block" id="submit" type="button" value="Send">
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {{ request.user.username|json_script:"user_username" }}
+    {{ room_name|json_script:"room-name" }}
+    
+
+    {% for message in messages %}
+        <script>
+            document.querySelector('#chat-text').value += ("{{ message.created_by|escapejs  }}" + ': ' + "{{ message.content|escapejs  }}" + '\n')
+        </script>
+    {% endfor %}
+
+
+    <!-- Chat Socket -->
+    <script>
+        const user_username = JSON.parse(document.getElementById('user_username').textContent);
+        document.querySelector('#submit').onclick = function (e) {
+            const messageInputDom = document.querySelector('#input');
+            const message = messageInputDom.value;
+            chatSocket.send(JSON.stringify({
+                'message': message,
+                'username': user_username,
+            }));
+            messageInputDom.value = '';
+        };
+
+        const roomName = JSON.parse(document.getElementById('room-name').textContent);
+
+        const chatSocket = new WebSocket(
+            'ws://' +
+            window.location.host +
+            '/ws/chat/group/' +
+            roomName +
+            '/'
+        );
+
+        chatSocket.onmessage = function (e) {
+            const data = JSON.parse(e.data);
+            document.querySelector('#chat-text').value += (data.username + ': ' + data.message + '\n')
+        } 
+
+        chatSocket.onclose = function(e) {
+            console.error('Chat socket closed unexpectedly');
+        };
+
+        document.querySelector('#input').focus();
+        document.querySelector('#input').onkeyup = function(e) {
+            if (e.keyCode === 13) {  // enter, return
+                document.querySelector('#submit').click();
+            }
+        };
+
+        let form = document.getElementById("chat_form");
+        form.addEventListener('submit', function(e){
+            e.preventDefault();
+        })
+
+    </script>
+
+    <!-- Chat Socket -->
+
+    <!-- Notification Socket -->
+
+    <script>
+        var loc = window.location
+    var wsStart = "ws://"
+    if (loc.protocol == "https:"){
+        wsStart = "wss://"
+    }
+    var webSocketEndpoint =  wsStart + loc.host + '/notifications/'  // ws : wss   // Websocket URL, Same on as mentioned in the routing.py
+
+
+    var socket = new WebSocket(webSocketEndpoint) // Creating a new Web Socket Connection
+
+    // Socket On receive message Functionality
+    socket.onmessage = function(e){
+        const data = JSON.parse(e.data);
+        no_new_wrapper = document.getElementById('no-new')
+        not_wrapper = document.getElementById('add_notification')
+        no_new_wrapper.innerHTML = ''
+        not_wrapper.innerHTML += `<a class="dropdown-item" href="http://127.0.0.1:8000/chat/group/notification/${data.notification['id']}/${data.notification['code']}">${data.notification['from_user']} sent a message to ${data.notification['group_name']}</a>` 
+            
+    }
+
+    // Socket close Functionality
+    socket.onclose = function(e){
+        console.error('Notification Socket is closed unexpectedly')
+    }
+    </script>
+
+    <!-- Notification Socket -->
+
+    <!-- Private Notification Socket -->
+  <script>
+    var loc = window.location
+  var wsStart = "ws://"
+  if (loc.protocol == "https:"){
+    wsStart = "wss://"
+  }
+  var webSocketEndpoint =  wsStart + loc.host + '/ws/private/'  // ws : wss   // Websocket URL, Same on as mentioned in the routing.py
+
+
+  var socket_new = new WebSocket(webSocketEndpoint) // Creating a new Web Socket Connection
+
+  // Socket On receive message Functionality
+  socket_new.onmessage = function(e){
+    const data = JSON.parse(e.data);
+    console.log(data)
+    no_new_wrapper = document.getElementById('no-new')
+    not_wrapper = document.getElementById('add_notification')
+    no_new_wrapper.innerHTML = ''
+    not_wrapper.innerHTML += `<a class="dropdown-item" href="http://127.0.0.1:8000/chat/notification/${data.notification['id']}">${data.notification['from_user']} sent you a message</a>` 
+        
+  }
+
+  // Socket close Functionality
+  socket_new.onclose = function(e){
+    console.error('Notification Socket is closed unexpectedly')
+  }
+
+  socket_new.onopen = function(e){
+    console.log('PrSocket is opened')
+  }
+</script>
+<!-- Private Notification Socket -->
+
+
+
+    <script src="{% static 'read_all.js' %}"></script>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
+        integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"
+        integrity="sha384-9/reFTGAW83EW2RDu2S0VKaIzap3H66lZH81PoYlFhbGU+6BZp6G7niu735Sk7lN" crossorigin="anonymous">
+    </script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"
+        integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV" crossorigin="anonymous">
+    </script>
+
+    <br><br><br>
+</body>
+
+</html>
